@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Clock, Menu, ChevronLeft, ChevronRight, Save, LogOut, Monitor, Lock } from 'lucide-react';
+import { Clock, Menu, ChevronLeft, ChevronRight, Save, LogOut, Monitor, FileEdit } from 'lucide-react';
 import { STEPS } from '../constants';
 import { StepId } from '../types';
 
@@ -9,11 +9,12 @@ interface MobileLayoutProps {
   timeLeft: number;
   onStepChange: (step: StepId) => void;
   onSwitchToAdmin: () => void;
+  onWriteReport: () => void;
   maxAllowedStepIndex: number;
   children: React.ReactNode;
 }
 
-export const MobileLayout: React.FC<MobileLayoutProps> = ({ currentStep, timeLeft, onStepChange, onSwitchToAdmin, maxAllowedStepIndex, children }) => {
+export const MobileLayout: React.FC<MobileLayoutProps> = ({ currentStep, timeLeft, onStepChange, onSwitchToAdmin, onWriteReport, maxAllowedStepIndex, children }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const formatTime = (seconds: number) => {
@@ -130,22 +131,28 @@ export const MobileLayout: React.FC<MobileLayoutProps> = ({ currentStep, timeLef
             <ChevronLeft />
           </button>
           
-          <button 
-            onClick={handleNext}
-            disabled={currentStepIndex === STEPS.length - 1}
-            className={`flex-1 rounded-xl font-bold py-3 px-4 shadow-md active:scale-[0.98] transition-transform flex justify-center items-center gap-2 ${
-                currentStepIndex === STEPS.length - 1 ? 'bg-red-600 text-white' : 
-                canProceed ? 'bg-red-600 text-white' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-            }`}
-          >
-            {currentStepIndex === STEPS.length - 1 ? (
-              <>제출하기 <Save size={18}/></>
-            ) : canProceed ? (
-              <>다음 단계 <ChevronRight size={18}/></>
-            ) : (
-                <><Lock size={16}/> 대기 중</>
-            )}
-          </button>
+          {canProceed ? (
+            <button
+              onClick={handleNext}
+              disabled={currentStepIndex === STEPS.length - 1}
+              className={`flex-1 rounded-xl font-bold py-3 px-4 shadow-md active:scale-[0.98] transition-transform flex justify-center items-center gap-2 ${
+                  currentStepIndex === STEPS.length - 1 ? 'bg-red-600 text-white' : 'bg-red-600 text-white'
+              }`}
+            >
+              {currentStepIndex === STEPS.length - 1 ? (
+                <>제출하기 <Save size={18}/></>
+              ) : (
+                <>다음 단계 <ChevronRight size={18}/></>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={onWriteReport}
+              className="flex-1 rounded-xl font-bold py-3 px-4 shadow-md active:scale-[0.98] transition-transform flex justify-center items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
+            >
+              <FileEdit size={18}/> 보고서 작성
+            </button>
+          )}
         </div>
       )}
     </div>

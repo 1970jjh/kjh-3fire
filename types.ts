@@ -60,3 +60,14 @@ export interface StudentProgress {
   lastActive: string;
   score?: number;
 }
+
+// Report Writer Data
+export interface ReportData {
+  title: string;
+  teamMembers: string;
+  situation: string;      // 1. 현상파악
+  problemDef: string;     // 2. 문제정의
+  rootCause: string;      // 3. 원인규명
+  solution: string;       // 4. 해결방안
+  prevention: string;     // 5. 재발방지대책
+}
