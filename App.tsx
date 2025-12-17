@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { MobileLayout } from './components/MobileLayout';
 import { AdminDashboard } from './components/AdminDashboard';
 import { SimulationContainer } from './components/SimulationContainer';
+import { ReportWriter } from './components/ReportWriter';
 import { SimulationState, StepId, UserRole, SessionConfig, UserProfile } from './types';
 import { INITIAL_TIME } from './constants';
 import { Monitor, Smartphone, AlertTriangle, Users, ArrowRight } from 'lucide-react';
@@ -47,6 +48,9 @@ const App: React.FC = () => {
 
   // Learner User State
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
+  // Report Writer State
+  const [showReportWriter, setShowReportWriter] = useState(false);
 
   useEffect(() => {
     let interval: any;
@@ -157,18 +161,29 @@ const App: React.FC = () => {
       );
   }
 
+  // Learner View: Report Writer
+  if (showReportWriter) {
+    return (
+      <ReportWriter
+        userProfile={userProfile || undefined}
+        onClose={() => setShowReportWriter(false)}
+      />
+    );
+  }
+
   // Learner View: Main Simulation (After Login)
   return (
-    <MobileLayout 
-      currentStep={simulationState.currentStep} 
+    <MobileLayout
+      currentStep={simulationState.currentStep}
       timeLeft={simulationState.timeLeft}
       onStepChange={handleStepChange}
       onSwitchToAdmin={() => setRole('admin')}
+      onWriteReport={() => setShowReportWriter(true)}
       maxAllowedStepIndex={sessionConfig.currentStageIndex}
     >
-      <SimulationContainer 
-        state={simulationState} 
-        updateState={updateState} 
+      <SimulationContainer
+        state={simulationState}
+        updateState={updateState}
         userProfile={userProfile || undefined}
         totalTeams={sessionConfig.totalTeams}
       />
