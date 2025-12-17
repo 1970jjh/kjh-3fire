@@ -12,34 +12,37 @@ import {
   updateLearnerProgress
 } from '../lib/firebase';
 
-// Hook for Admin to manage session
-export const useAdminSession = () => {
-  const [sessionId, setSessionId] = useState<string | null>(() => {
-    // Try to restore from localStorage
-    return localStorage.getItem('admin_session_id');
-  });
-  const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
-  const [learners, setLearners] = useState<Record<string, any>>({});
-  const [loading, setLoading] = useState(false);
+// Hook for Admin to manage multiple sessions
+export const useAdminSessions = () => {
+  const [sessions, setSessions] = useState<Record<string, SessionConfig & { id: string }>>({});
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedSessionLearners, setSelectedSessionLearners] = useState<Record<string, any>>({});
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Subscribe to session changes
+  // Subscribe to all sessions
   useEffect(() => {
-    if (!sessionId) return;
-
-    const unsubSession = subscribeToSession(sessionId, (config) => {
-      setSessionConfig(config);
+    const unsub = subscribeToAllSessions((data) => {
+      setSessions(data);
+      setLoading(false);
     });
 
-    const unsubLearners = subscribeToLearners(sessionId, (data) => {
-      setLearners(data);
+    return () => unsub();
+  }, []);
+
+  // Subscribe to selected session's learners
+  useEffect(() => {
+    if (!selectedSessionId) {
+      setSelectedSessionLearners({});
+      return;
+    }
+
+    const unsub = subscribeToLearners(selectedSessionId, (data) => {
+      setSelectedSessionLearners(data);
     });
 
-    return () => {
-      unsubSession();
-      unsubLearners();
-    };
-  }, [sessionId]);
+    return () => unsub();
+  }, [selectedSessionId]);
 
   // Create new session
   const createNewSession = useCallback(async (config: SessionConfig) => {
@@ -48,8 +51,6 @@ export const useAdminSession = () => {
     try {
       const newId = generateSessionId();
       await createSession(newId, config);
-      setSessionId(newId);
-      localStorage.setItem('admin_session_id', newId);
       return newId;
     } catch (err: any) {
       setError(err.message);
@@ -60,45 +61,46 @@ export const useAdminSession = () => {
   }, []);
 
   // Update session
-  const updateSessionConfig = useCallback(async (updates: Partial<SessionConfig>) => {
-    if (!sessionId) return;
-    setLoading(true);
+  const updateSessionConfig = useCallback(async (sessionId: string, updates: Partial<SessionConfig>) => {
     setError(null);
     try {
       await updateSession(sessionId, updates);
     } catch (err: any) {
       setError(err.message);
       throw err;
-    } finally {
-      setLoading(false);
     }
-  }, [sessionId]);
+  }, []);
 
-  // Close/Delete session
-  const closeSession = useCallback(async () => {
-    if (!sessionId) return;
-    setLoading(true);
+  // Delete session
+  const removeSession = useCallback(async (sessionId: string) => {
+    setError(null);
     try {
       await deleteSession(sessionId);
-      setSessionId(null);
-      setSessionConfig(null);
-      localStorage.removeItem('admin_session_id');
+      if (selectedSessionId === sessionId) {
+        setSelectedSessionId(null);
+      }
     } catch (err: any) {
       setError(err.message);
-    } finally {
-      setLoading(false);
+      throw err;
     }
-  }, [sessionId]);
+  }, [selectedSessionId]);
+
+  // Select a session to view details
+  const selectSession = useCallback((sessionId: string | null) => {
+    setSelectedSessionId(sessionId);
+  }, []);
 
   return {
-    sessionId,
-    sessionConfig,
-    learners,
+    sessions,
+    selectedSessionId,
+    selectedSession: selectedSessionId ? sessions[selectedSessionId] : null,
+    selectedSessionLearners,
     loading,
     error,
     createNewSession,
     updateSessionConfig,
-    closeSession
+    removeSession,
+    selectSession
   };
 };
 

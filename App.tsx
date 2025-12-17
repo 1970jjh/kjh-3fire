@@ -6,7 +6,7 @@ import { SimulationContainer } from './components/SimulationContainer';
 import { ReportWriter } from './components/ReportWriter';
 import { SimulationState, StepId, UserRole, SessionConfig, UserProfile } from './types';
 import { INITIAL_TIME } from './constants';
-import { Monitor, Smartphone, AlertTriangle, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
+import { Monitor, Smartphone, AlertTriangle, ArrowRight, Loader2, Building2, Users, ChevronRight } from 'lucide-react';
 import { useLearnerSession } from './hooks/useFirebaseSession';
 
 const initialState: SimulationState = {
@@ -133,10 +133,10 @@ const App: React.FC = () => {
     );
   }
 
-  // Learner View: Session Code Entry (No sessions or not joined)
+  // Learner View: Group Selection (No code needed)
   if (role === 'learner' && !userProfile) {
       return (
-          <LearnerSessionJoin
+          <LearnerGroupSelect
             availableSessions={availableSessions}
             loading={sessionLoading}
             onJoin={async (sessionId, profile) => {
@@ -178,33 +178,20 @@ const App: React.FC = () => {
   );
 };
 
-// New component for session joining with code
-const LearnerSessionJoin: React.FC<{
+// Learner Group Selection Component (No code needed - just pick from list)
+const LearnerGroupSelect: React.FC<{
     availableSessions: Record<string, SessionConfig & { id: string }>;
     loading: boolean;
     onJoin: (sessionId: string, profile: UserProfile) => Promise<void>;
     onBack: () => void;
 }> = ({ availableSessions, loading, onJoin, onBack }) => {
-    const [sessionCode, setSessionCode] = useState('');
+    const [selectedSession, setSelectedSession] = useState<(SessionConfig & { id: string }) | null>(null);
     const [name, setName] = useState('');
     const [teamId, setTeamId] = useState<number>(1);
-    const [step, setStep] = useState<'code' | 'profile'>('code');
-    const [selectedSession, setSelectedSession] = useState<(SessionConfig & { id: string }) | null>(null);
     const [error, setError] = useState('');
     const [joining, setJoining] = useState(false);
 
-    const handleCodeSubmit = () => {
-      const code = sessionCode.toUpperCase().trim();
-      const session = availableSessions[code];
-
-      if (session) {
-        setSelectedSession(session);
-        setStep('profile');
-        setError('');
-      } else {
-        setError('유효하지 않은 접속 코드입니다. 관리자에게 문의하세요.');
-      }
-    };
+    const sessionsArray = Object.values(availableSessions);
 
     const handleJoin = async () => {
       if (!name.trim()) {
@@ -232,73 +219,59 @@ const LearnerSessionJoin: React.FC<{
         <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
           <div className="text-center text-white">
             <Loader2 className="animate-spin mx-auto mb-4" size={48} />
-            <p>세션 정보 불러오는 중...</p>
+            <p>그룹 정보 불러오는 중...</p>
           </div>
         </div>
       );
     }
 
-    // Step 1: Enter session code
-    if (step === 'code') {
+    // Step 1: Select a group
+    if (!selectedSession) {
       return (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 font-sans flex-col">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
                 <div className="bg-red-600 p-6 text-white text-center">
                     <h2 className="text-2xl font-bold mb-1">FireSim 입장</h2>
-                    <p className="opacity-90 text-sm">관리자에게 받은 접속 코드를 입력하세요.</p>
+                    <p className="opacity-90 text-sm">참여할 교육 그룹을 선택하세요</p>
                 </div>
-                <div className="p-8 space-y-6">
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">접속 코드</label>
-                        <input
-                            type="text"
-                            value={sessionCode}
-                            onChange={(e) => {
-                              setSessionCode(e.target.value.toUpperCase());
-                              setError('');
-                            }}
-                            placeholder="예: ABC123"
-                            className="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-2xl text-center font-mono tracking-widest uppercase"
-                            maxLength={6}
-                            autoFocus
-                        />
-                        {error && (
-                          <p className="text-red-500 text-sm mt-2 text-center">{error}</p>
-                        )}
-                    </div>
-
-                    {/* Show available sessions for quick access (optional) */}
-                    {Object.keys(availableSessions).length > 0 && (
-                      <div className="border-t border-slate-200 pt-4">
-                        <p className="text-xs text-slate-400 text-center mb-3">또는 오픈된 세션 선택</p>
-                        <div className="space-y-2">
-                          {Object.values(availableSessions).map((session) => (
-                            <button
-                              key={session.id}
-                              onClick={() => {
-                                setSelectedSession(session);
-                                setSessionCode(session.id);
-                                setStep('profile');
-                              }}
-                              className="w-full p-3 border border-slate-200 rounded-xl hover:bg-slate-50 text-left flex justify-between items-center"
-                            >
-                              <span className="font-bold text-slate-800">{session.groupName}</span>
-                              <span className="text-xs text-slate-400 font-mono">{session.id}</span>
-                            </button>
-                          ))}
+                <div className="p-6">
+                    {sessionsArray.length === 0 ? (
+                      <div className="text-center py-12">
+                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <Building2 size={32} className="text-slate-400" />
                         </div>
+                        <h3 className="font-bold text-slate-600 mb-2">진행 중인 교육이 없습니다</h3>
+                        <p className="text-sm text-slate-400">관리자가 교육을 시작할 때까지<br/>잠시만 기다려주세요.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {sessionsArray.map((session) => (
+                          <button
+                            key={session.id}
+                            onClick={() => setSelectedSession(session)}
+                            className="w-full p-4 border-2 border-slate-200 hover:border-red-500 rounded-xl text-left flex items-center justify-between group transition-colors"
+                          >
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                <span className="text-xs font-bold text-green-600">진행중</span>
+                              </div>
+                              <h3 className="font-bold text-slate-900 text-lg">{session.groupName}</h3>
+                              <p className="text-sm text-slate-500 flex items-center gap-2 mt-1">
+                                <Users size={14} />
+                                {session.totalTeams}개조 운영
+                              </p>
+                            </div>
+                            <ChevronRight size={24} className="text-slate-300 group-hover:text-red-500" />
+                          </button>
+                        ))}
                       </div>
                     )}
 
                     <button
-                        onClick={handleCodeSubmit}
-                        disabled={sessionCode.length < 4}
-                        className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={onBack}
+                      className="w-full text-slate-400 text-sm py-4 mt-4 hover:text-slate-600 transition-colors"
                     >
-                        다음 <ArrowRight size={20} />
-                    </button>
-
-                    <button onClick={onBack} className="w-full text-slate-400 text-sm py-2 hover:text-slate-600 transition-colors">
                         ← 처음으로 돌아가기
                     </button>
                 </div>
@@ -310,37 +283,36 @@ const LearnerSessionJoin: React.FC<{
       );
     }
 
-    // Step 2: Enter profile info
+    // Step 2: Enter name and team
     return (
         <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 font-sans flex-col">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
                 <div className="bg-red-600 p-6 text-white text-center">
                     <h2 className="text-2xl font-bold mb-1">FireSim 입장</h2>
-                    <p className="opacity-90 text-sm">교육에 참여할 정보를 입력하세요.</p>
+                    <p className="opacity-90 text-sm">교육에 참여할 정보를 입력하세요</p>
                 </div>
-                <div className="p-8 space-y-6">
-                    {/* Session Info */}
+                <div className="p-6 space-y-5">
+                    {/* Selected Group Info */}
                     <div className="bg-slate-100 p-4 rounded-xl">
-                      <p className="text-xs text-slate-500 font-bold mb-1">접속 세션</p>
-                      <p className="font-bold text-slate-900">{selectedSession?.groupName}</p>
-                      <p className="text-xs text-slate-400 font-mono">{selectedSession?.id}</p>
+                      <p className="text-xs text-slate-500 font-bold mb-1">선택한 그룹</p>
+                      <p className="font-bold text-slate-900 text-lg">{selectedSession.groupName}</p>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">조 선택 (Team)</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">조 선택</label>
                         <select
                             value={teamId}
                             onChange={(e) => setTeamId(Number(e.target.value))}
-                            className="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-lg bg-white"
+                            className="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-lg bg-white"
                         >
-                            {Array.from({ length: selectedSession?.totalTeams || 6 }, (_, i) => i + 1).map(num => (
+                            {Array.from({ length: selectedSession.totalTeams }, (_, i) => i + 1).map(num => (
                                 <option key={num} value={num}>{num}조</option>
                             ))}
                         </select>
                     </div>
 
                     <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">이름 (Name)</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">이름</label>
                         <input
                             type="text"
                             value={name}
@@ -349,7 +321,7 @@ const LearnerSessionJoin: React.FC<{
                               setError('');
                             }}
                             placeholder="본인의 이름을 입력하세요"
-                            className="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-lg"
+                            className="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 outline-none text-lg"
                         />
                         {error && (
                           <p className="text-red-500 text-sm mt-2">{error}</p>
@@ -359,7 +331,7 @@ const LearnerSessionJoin: React.FC<{
                     <button
                         onClick={handleJoin}
                         disabled={joining}
-                        className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-50"
+                        className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                         {joining ? (
                           <><Loader2 className="animate-spin" size={20} /> 입장 중...</>
@@ -369,10 +341,10 @@ const LearnerSessionJoin: React.FC<{
                     </button>
 
                     <button
-                      onClick={() => setStep('code')}
+                      onClick={() => setSelectedSession(null)}
                       className="w-full text-slate-400 text-sm py-2 hover:text-slate-600 transition-colors"
                     >
-                        ← 코드 다시 입력
+                        ← 다른 그룹 선택
                     </button>
                 </div>
             </div>
