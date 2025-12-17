@@ -1,31 +1,33 @@
 
-import React, { useState } from 'react';
-import { BarChart3, Users, CheckCircle, AlertTriangle, Search, Filter, MoreHorizontal, Smartphone, Play, Settings, Lock, Trash2, LogOut, ArrowRight, ChevronRight, Unlock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { BarChart3, Users, CheckCircle, AlertTriangle, Search, Filter, MoreHorizontal, Smartphone, Play, Settings, Lock, Trash2, LogOut, ArrowRight, ChevronRight, Unlock, Copy, Wifi } from 'lucide-react';
 import { StudentProgress, SessionConfig } from '../types';
 import { STEPS } from '../constants';
+import { useAdminSession } from '../hooks/useFirebaseSession';
 
 interface AdminDashboardProps {
     onSwitchToLearner: () => void;
-    sessionConfig: SessionConfig;
-    setSessionConfig: (config: SessionConfig) => void;
 }
 
-// Mock Data
-const MOCK_STUDENTS: StudentProgress[] = [
-  { id: '1', name: '김철수', step: 'report', status: 'completed', lastActive: '방금 전', score: 92 },
-  { id: '2', name: '이영희', step: 'root-cause', status: 'active', lastActive: '2분 전' },
-  { id: '3', name: '박민수', step: 'problem-definition', status: 'stuck', lastActive: '15분 전' },
-  { id: '4', name: '최지우', step: 'solution', status: 'active', lastActive: '5분 전' },
-  { id: '5', name: '정우성', step: 'intro', status: 'active', lastActive: '1분 전' },
-];
-
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearner, sessionConfig, setSessionConfig }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearner }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [setupData, setSetupData] = useState({
       groupName: '',
       totalTeams: 6
   });
+  const [copied, setCopied] = useState(false);
+
+  const {
+    sessionId,
+    sessionConfig,
+    learners,
+    loading,
+    error,
+    createNewSession,
+    updateSessionConfig,
+    closeSession
+  } = useAdminSession();
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,52 +38,67 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
     }
   };
 
-  const handleStartSession = () => {
+  const handleStartSession = async () => {
       if(!setupData.groupName) {
           alert("그룹명(교육과정명)을 입력해주세요.");
           return;
       }
-      setSessionConfig({
+      try {
+        await createNewSession({
           isOpen: true,
           groupName: setupData.groupName,
           totalTeams: setupData.totalTeams,
-          currentStageIndex: 0 // Start at Intro
-      });
+          currentStageIndex: 0
+        });
+      } catch (err) {
+        alert("세션 생성에 실패했습니다. 다시 시도해주세요.");
+      }
   };
 
-  const handleDeleteSession = () => {
+  const handleDeleteSession = async () => {
       if(window.confirm("정말로 현재 교육 그룹 세션을 종료하고 삭제하시겠습니까? 모든 진행 데이터가 초기화됩니다.")) {
-          setSessionConfig({
-              isOpen: false,
-              groupName: '',
-              totalTeams: 6,
-              currentStageIndex: 0
-          });
+          await closeSession();
           setSetupData({ groupName: '', totalTeams: 6 });
       }
   };
 
-  const advanceStage = () => {
-    if (sessionConfig.currentStageIndex < STEPS.length - 1) {
+  const advanceStage = async () => {
+    if (sessionConfig && sessionConfig.currentStageIndex < STEPS.length - 1) {
       if(window.confirm(`'${STEPS[sessionConfig.currentStageIndex + 1].title}' 단계를 오픈하시겠습니까?`)) {
-          setSessionConfig({
-            ...sessionConfig,
+          await updateSessionConfig({
             currentStageIndex: sessionConfig.currentStageIndex + 1
           });
       }
     }
   };
 
-  const rollbackStage = () => {
-    if (sessionConfig.currentStageIndex > 0) {
+  const rollbackStage = async () => {
+    if (sessionConfig && sessionConfig.currentStageIndex > 0) {
         if(window.confirm("이전 단계로 되돌리시겠습니까? 학습자들의 진행이 제한될 수 있습니다.")) {
-            setSessionConfig({
-                ...sessionConfig,
+            await updateSessionConfig({
                 currentStageIndex: sessionConfig.currentStageIndex - 1
             });
         }
     }
   };
+
+  const copySessionCode = () => {
+    if (sessionId) {
+      navigator.clipboard.writeText(sessionId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // Convert learners object to array for display
+  const learnersArray = Object.entries(learners).map(([id, data]: [string, any]) => ({
+    id,
+    name: data.name,
+    teamId: data.teamId,
+    step: data.currentStep || 'intro',
+    lastActive: data.lastActive ? new Date(data.lastActive).toLocaleTimeString('ko-KR') : '-',
+    status: data.currentStep === 'report' ? 'completed' : 'active'
+  }));
 
   // 1. Login Screen
   if (!isAuthenticated) {
@@ -97,8 +114,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
                 </div>
                 <form onSubmit={handleLogin} className="space-y-4">
                     <div>
-                        <input 
-                            type="password" 
+                        <input
+                            type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             className="w-full p-4 border border-slate-200 bg-slate-50 rounded-xl text-center text-lg tracking-widest focus:ring-2 focus:ring-slate-900 focus:bg-white outline-none transition-all"
@@ -106,7 +123,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
                             autoFocus
                         />
                     </div>
-                    <button 
+                    <button
                         type="submit"
                         className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
                     >
@@ -124,7 +141,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
   }
 
   // 2. Session Setup View (Create Group)
-  if (!sessionConfig.isOpen) {
+  if (!sessionConfig || !sessionConfig.isOpen) {
       return (
           <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-sans">
               <div className="bg-white max-w-lg w-full rounded-2xl shadow-xl border border-slate-100 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-300">
@@ -138,8 +155,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
                   <div className="p-8 space-y-8 flex-1">
                       <div>
                           <label className="block text-sm font-bold text-slate-800 mb-2">교육 과정명 (그룹명)</label>
-                          <input 
-                              type="text" 
+                          <input
+                              type="text"
                               value={setupData.groupName}
                               onChange={(e) => setSetupData({...setupData, groupName: e.target.value})}
                               placeholder="예: 2024 신입사원 문제해결 과정"
@@ -151,10 +168,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
                               <label className="block text-sm font-bold text-slate-800">조(Team) 편성 수</label>
                               <span className="text-2xl font-black text-blue-600">{setupData.totalTeams}<span className="text-base font-normal text-slate-400 ml-1">개조</span></span>
                           </div>
-                          <input 
-                              type="range" 
-                              min="1" 
-                              max="12" 
+                          <input
+                              type="range"
+                              min="1"
+                              max="12"
                               step="1"
                               value={setupData.totalTeams}
                               onChange={(e) => setSetupData({...setupData, totalTeams: parseInt(e.target.value)})}
@@ -167,11 +184,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
                       </div>
 
                       <div className="pt-4">
-                          <button 
+                          <button
                               onClick={handleStartSession}
-                              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                              disabled={loading}
+                              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50"
                           >
-                              <Play size={20} fill="currentColor" /> 교육 세션 시작 (그룹 생성)
+                              {loading ? '생성 중...' : <><Play size={20} fill="currentColor" /> 교육 세션 시작 (그룹 생성)</>}
                           </button>
                       </div>
                   </div>
@@ -205,15 +223,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
             <CheckCircle size={18} /> 평가 및 피드백
           </button>
         </nav>
-        
+
         <div className="p-4 border-t border-slate-100 space-y-2">
-            <button 
+            <button
                 onClick={handleDeleteSession}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold rounded-xl text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
             >
                 <Trash2 size={16} /> 그룹 삭제 (세션 종료)
             </button>
-            <button 
+            <button
                 onClick={onSwitchToLearner}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl text-slate-500 hover:bg-slate-100 transition-colors"
             >
@@ -234,23 +252,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
                 <h1 className="font-bold text-lg text-slate-900">{sessionConfig.groupName}</h1>
             </div>
             <div className="flex items-center gap-6">
+                {/* Session Code Display */}
+                <div className="bg-slate-100 px-4 py-2 rounded-xl flex items-center gap-3">
+                    <div className="text-right">
+                        <p className="text-xs text-slate-400 font-bold">접속 코드</p>
+                        <p className="font-mono font-black text-slate-900 text-lg tracking-wider">{sessionId}</p>
+                    </div>
+                    <button
+                        onClick={copySessionCode}
+                        className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+                        title="코드 복사"
+                    >
+                        {copied ? <CheckCircle size={20} className="text-green-500" /> : <Copy size={20} className="text-slate-500" />}
+                    </button>
+                </div>
                 <div className="text-right hidden md:block">
                     <p className="text-xs text-slate-400 font-bold uppercase">Total Teams</p>
                     <p className="font-bold text-slate-800">{sessionConfig.totalTeams}개조 운영 중</p>
-                </div>
-                <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500">
-                    <Settings size={20} />
                 </div>
             </div>
         </header>
 
         <div className="p-8 flex-1 max-w-7xl mx-auto w-full">
-            
+
+            {/* Connection Info Banner */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                    <div className="bg-white/20 p-3 rounded-xl">
+                        <Wifi size={28} />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-lg">학습자 접속 안내</h3>
+                        <p className="text-blue-100 text-sm">학습자들에게 아래 접속 코드를 안내해주세요</p>
+                    </div>
+                </div>
+                <div className="bg-white text-slate-900 px-6 py-3 rounded-xl flex items-center gap-3">
+                    <span className="text-sm text-slate-500">접속코드:</span>
+                    <span className="font-mono font-black text-2xl tracking-widest">{sessionId}</span>
+                    <button
+                        onClick={copySessionCode}
+                        className="ml-2 p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                        {copied ? <CheckCircle size={20} className="text-green-500" /> : <Copy size={20} className="text-slate-400" />}
+                    </button>
+                </div>
+            </div>
+
             {/* Stage Control Panel */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-8 relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-slate-100">
-                     <div 
-                        className="h-full bg-slate-900 transition-all duration-500" 
+                     <div
+                        className="h-full bg-slate-900 transition-all duration-500"
                         style={{ width: `${((sessionConfig.currentStageIndex + 1) / STEPS.length) * 100}%` }}
                     />
                 </div>
@@ -266,16 +318,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
                         <p className="text-slate-400 text-sm mt-1">{STEPS[sessionConfig.currentStageIndex].description}</p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <button 
+                        <button
                             onClick={rollbackStage}
-                            disabled={sessionConfig.currentStageIndex === 0}
+                            disabled={sessionConfig.currentStageIndex === 0 || loading}
                             className="px-4 py-3 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                         >
                             이전 단계
                         </button>
-                        <button 
+                        <button
                             onClick={advanceStage}
-                            disabled={sessionConfig.currentStageIndex === STEPS.length - 1}
+                            disabled={sessionConfig.currentStageIndex === STEPS.length - 1 || loading}
                             className="px-6 py-3 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
                         >
                             다음 단계 오픈 <ChevronRight size={16} />
@@ -293,7 +345,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
                             <Users size={16} />
                         </div>
                     </div>
-                    <div className="text-3xl font-black text-slate-900">24<span className="text-lg text-slate-400 font-medium ml-1">/ 30</span></div>
+                    <div className="text-3xl font-black text-slate-900">{learnersArray.length}<span className="text-lg text-slate-400 font-medium ml-1">명</span></div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start mb-4">
@@ -302,19 +354,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
                              <BarChart3 size={16} />
                         </div>
                     </div>
-                    <div className="text-3xl font-black text-slate-900">68%</div>
+                    <div className="text-3xl font-black text-slate-900">
+                        {learnersArray.length > 0
+                          ? Math.round(learnersArray.reduce((acc, l) => acc + (STEPS.findIndex(s => s.id === l.step) + 1), 0) / learnersArray.length / STEPS.length * 100)
+                          : 0}%
+                    </div>
                     <div className="w-full bg-slate-100 h-2 mt-4 rounded-full overflow-hidden">
-                        <div className="bg-blue-500 h-full w-[68%] rounded-full"></div>
+                        <div
+                            className="bg-blue-500 h-full rounded-full transition-all"
+                            style={{
+                                width: `${learnersArray.length > 0
+                                    ? Math.round(learnersArray.reduce((acc, l) => acc + (STEPS.findIndex(s => s.id === l.step) + 1), 0) / learnersArray.length / STEPS.length * 100)
+                                    : 0}%`
+                            }}
+                        ></div>
                     </div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start mb-4">
-                        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Stuck Users</span>
+                        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Teams Active</span>
                         <div className="bg-orange-100 text-orange-700 p-1.5 rounded-lg">
                             <AlertTriangle size={16} />
                         </div>
                     </div>
-                    <div className="text-3xl font-black text-slate-900">3<span className="text-lg text-slate-400 font-medium ml-1">명</span></div>
+                    <div className="text-3xl font-black text-slate-900">
+                        {new Set(learnersArray.map(l => l.teamId)).size}
+                        <span className="text-lg text-slate-400 font-medium ml-1">/ {sessionConfig.totalTeams}조</span>
+                    </div>
                 </div>
                 <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start mb-4">
@@ -323,20 +389,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
                             <CheckCircle size={16} />
                         </div>
                     </div>
-                    <div className="text-3xl font-black text-slate-900">5<span className="text-lg text-slate-400 font-medium ml-1">명</span></div>
+                    <div className="text-3xl font-black text-slate-900">
+                        {learnersArray.filter(l => l.step === 'report').length}
+                        <span className="text-lg text-slate-400 font-medium ml-1">명</span>
+                    </div>
                 </div>
             </div>
 
             {/* Student Table */}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <h2 className="font-bold text-lg text-slate-800">학습자 현황 모니터링</h2>
+                    <h2 className="font-bold text-lg text-slate-800">학습자 현황 모니터링 ({learnersArray.length}명 접속)</h2>
                     <div className="flex gap-2 w-full sm:w-auto">
                         <div className="relative flex-1 sm:flex-none">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                            <input 
-                                className="pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm w-full focus:ring-2 focus:ring-slate-900 outline-none bg-slate-50 focus:bg-white transition-colors" 
-                                placeholder="이름 검색" 
+                            <input
+                                className="pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm w-full focus:ring-2 focus:ring-slate-900 outline-none bg-slate-50 focus:bg-white transition-colors"
+                                placeholder="이름 검색"
                             />
                         </div>
                         <button className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors text-slate-600">
@@ -348,42 +417,54 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onSwitchToLearne
                     <table className="w-full text-left text-sm">
                         <thead className="bg-slate-50/50 text-slate-500 border-b border-slate-100">
                             <tr>
+                                <th className="px-6 py-4 font-bold">조</th>
                                 <th className="px-6 py-4 font-bold">이름</th>
                                 <th className="px-6 py-4 font-bold">현재 단계</th>
                                 <th className="px-6 py-4 font-bold">상태</th>
                                 <th className="px-6 py-4 font-bold">마지막 활동</th>
-                                <th className="px-6 py-4 font-bold">점수 (예측)</th>
                                 <th className="px-6 py-4 font-bold text-right">관리</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                            {MOCK_STUDENTS.map(student => (
-                                <tr key={student.id} className="hover:bg-slate-50 transition-colors group">
-                                    <td className="px-6 py-4 font-bold text-slate-900">{student.name}</td>
-                                    <td className="px-6 py-4">
-                                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
-                                            {STEPS.find(s => s.id === student.step)?.shortTitle || student.step}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        {student.status === 'completed' && <span className="text-green-600 font-bold flex items-center gap-1.5"><CheckCircle size={14}/> 완료</span>}
-                                        {student.status === 'active' && <span className="text-blue-600 font-bold flex items-center gap-1.5"><div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"/> 진행중</span>}
-                                        {student.status === 'stuck' && <span className="text-orange-500 font-bold flex items-center gap-1.5"><AlertTriangle size={14}/> 지연됨</span>}
-                                    </td>
-                                    <td className="px-6 py-4 text-slate-500 font-medium">{student.lastActive}</td>
-                                    <td className="px-6 py-4 font-black text-slate-800">{student.score ? `${student.score}점` : '-'}</td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button className="text-slate-300 hover:text-slate-600 transition-colors p-1 rounded hover:bg-slate-100">
-                                            <MoreHorizontal size={20} />
-                                        </button>
+                            {learnersArray.length === 0 ? (
+                                <tr>
+                                    <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                                        아직 접속한 학습자가 없습니다.<br/>
+                                        <span className="text-sm">학습자들에게 접속 코드 <strong className="text-slate-600">{sessionId}</strong>를 안내해주세요.</span>
                                     </td>
                                 </tr>
-                            ))}
+                            ) : (
+                                learnersArray.map(learner => (
+                                    <tr key={learner.id} className="hover:bg-slate-50 transition-colors group">
+                                        <td className="px-6 py-4">
+                                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
+                                                {learner.teamId}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 font-bold text-slate-900">{learner.name}</td>
+                                        <td className="px-6 py-4">
+                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
+                                                {STEPS.find(s => s.id === learner.step)?.shortTitle || learner.step}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {learner.status === 'completed' && <span className="text-green-600 font-bold flex items-center gap-1.5"><CheckCircle size={14}/> 완료</span>}
+                                            {learner.status === 'active' && <span className="text-blue-600 font-bold flex items-center gap-1.5"><div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"/> 진행중</span>}
+                                        </td>
+                                        <td className="px-6 py-4 text-slate-500 font-medium">{learner.lastActive}</td>
+                                        <td className="px-6 py-4 text-right">
+                                            <button className="text-slate-300 hover:text-slate-600 transition-colors p-1 rounded hover:bg-slate-100">
+                                                <MoreHorizontal size={20} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
                         </tbody>
                     </table>
                 </div>
             </div>
-            
+
             <div className="mt-12 text-center">
                 <p className="text-xs font-bold text-blue-600 opacity-60">JJ Creative 교육연구소 Admin System</p>
             </div>
